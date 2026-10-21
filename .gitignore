@@ -57,6 +57,9 @@ local_settings.py
 instance/
 .webassets-cache
 
+# MacOS Finder
+.DS_Store
+
 # Scrapy stuff:
 .scrapy
 
@@ -91,3 +94,13 @@ ENV/
 # vi(m)
 *.swp
 settings.json
+
+# VisualStudio
+.vs/
+.vscode/launch.json
+
+# sigma2attack
+heatmap.json
+
+# VS Code workspace settings
+.vscode/

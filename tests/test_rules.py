@@ -3,33 +3,100 @@
 Checks for noncompliance or common errors on all rules
 
 Run using the command
-# python -m unittest test_rules.py
+# python test_rules.py
 """
 
 import os
+import sys
 import unittest
 import yaml
 import re
+import string
+import copy
+
+# from attackcti import attack_client
+from colorama import init
+from colorama import Fore
+import collections
+
+
+# Old Tests cover by pySigma 0.10.9 and simgma-cli 0.7.10
+# Use sigma check --fail-on-error --fail-on-issues --validation-config tests/sigma_cli_conf.yml rules*
+#
+
 
 class TestRules(unittest.TestCase):
-    MITRE_TECHNIQUES = ["t1075", "t1189", "t1190", "t1200", "t1091", "t1193", "t1192", "t1194", "t1195", "t1199", "t1078", "t1155", "t1191", "t1059", "t1223", "t1196", "t1173", "t1106", "t1129", "t1203", "t1061", "t1118", "t1152", "t1168", "t1177", "t1170", "t1086", "t1121", "t1117", "t1085", "t1053", "t1064", "t1035", "t1218", "t1216", "t1153", "t1151", "t1072", "t1154", "t1127", "t1204", "t1047", "t1028", "t1220", "t1156", "t1015", "t1098", "t1182", "t1103", "t1138", "t1131", "t1197", "t1067", "t1176", "t1042", "t1109", "t1122", "t1136", "t1038", "t1157", "t1133", "t1044", "t1158", "t1179", "t1062", "t1183", "t1215", "t1159", "t1160", "t1152", "t1161", "t1168", "t1162", "t1037", "t1031", "t1128", "t1050", "t1137", "t1034", "t1150", "t1205", "t1013", "t1163", "t1164", "t1108", "t1060", "t1053", "t1180", "t1101", "t1058", "t1166", "t1023", "t1198", "t1165", "t1019", "t1209", "t1154", "t1078", "t1100", "t1084", "t1004", "t1134", "t1015", "t1182", "t1103", "t1138", "t1088", "t1038", "t1157", "t1068", "t1181", "t1044", "t1179", "t1183", "t1160", "t1050", "t1034", "t1150", "t1013", "t1055", "t1053", "t1058", "t1166", "t1178", "t1165", "t1169", "t1206", "t1078", "t1100", "t1134", "t1009", "t1197", "t1088", "t1146", "t1191", "t1116", "t1223", "t1109", "t1122", "t1196", "t1207", "t1140", "t1089", "t1038", "t1073", "t1211", "t1181", "t1107", "t1222", "t1006", "t1144", "t1158", "t1147", "t1143", "t1148", "t1183", "t1054", "t1066", "t1070", "t1202", "t1130", "t1118", "t1152", "t1149", "t1036", "t1112", "t1170", "t1126", "t1096", "t1027", "t1150", "t1205", "t1186", "t1093", "t1055", "t1108", "t1121", "t1117", "t1014", "t1085", "t1064", "t1218", "t1216", "t1198", "t1045", "t1151", "t1221", "t1099", "t1127", "t1078", "t1102", "t1220", "t1098", "t1139", "t1110", "t1003", "t1081", "t1214", "t1212", "t1187", "t1179", "t1056", "t1141", "t1208", "t1142", "t1171", "t1040", "t1174", "t1145", "t1167", "t1111", "t1087", "t1010", "t1217", "t1083", "t1046", "t1135", "t1040", "t1201", "t1120", "t1069", "t1057", "t1012", "t1018", "t1063", "t1082", "t1016", "t1049", "t1033", "t1124", "t1155", "t1017", "t1175", "t1210", "t1037", "t1097", "t1076", "t1105", "t1021", "t1091", "t1051", "t1184", "t1080", "t1072", "t1077", "t1028", "t1123", "t1119", "t1115", "t1213", "t1005", "t1039", "t1025", "t1074", "t1114", "t1056", "t1185", "t1113", "t1125", "t1020", "t1002", "t1022", "t1030", "t1048", "t1041", "t1011", "t1052", "t1029", "t1043", "t1092", "t1090", "t1094", "t1024", "t1132", "t1001", "t1172", "t1008", "t1188", "t1104", "t1026", "t1079", "t1205", "t1219", "t1105", "t1071", "t1032", "t1095", "t1065", "t1102"]
-    MITRE_TECHNIQUE_NAMES = ["process_injection", "signed_binary_proxy_execution", "process_injection"] # incomplete list
-    MITRE_TACTICS = ["initial_access", "execution", "persistence", "privilege_escalation", "defense_evasion", "credential_access", "discovery", "lateral_movement", "collection", "exfiltration", "command_and_control"]
-    MITRE_GROUPS =  ["g0018", "g0006", "g0005", "g0023", "g0025", "g0026", "g0073", "g0007", "g0016", "g0022", "g0013", "g0050", "g0064", "g0067", "g0001", "g0063", "g0060", "g0008", "g0058", "g0003", "g0080", "g0052", "g0070", "g0012", "g0079", "g0009", "g0035", "g0074", "g0017", "g0031", "g0066", "g0020", "g0051", "g0053", "g0037", "g0046", "g0061", "g0047", "g0036", "g0078", "g0043", "g0072", "g0004", "g0032", "g0077", "g0065", "g0030", "g0059", "g0045", "g0002", "g0021", "g0069", "g0019", "g0055", "g0014", "g0049", "g0071", "g0040", "g0011", "g0068", "g0033", "g0056", "g0024", "g0075", "g0048", "g0034", "g0029", "g0054", "g0038", "g0041", "g0039", "g0062", "g0015", "g0028", "g0027", "g0076", "g0010", "g0044"]
-    MITRE_SOFTWARE = ["s0066", "s0065", "s0202", "s0309", "s0045", "s0092", "s0319", "s0296", "s0304", "s0310", "s0292", "s0099", "s0073", "s0110", "s0129", "s0093", "s0031", "s0245", "s0128", "s0234", "s0239", "s0127", "s0017", "s0268", "s0190", "s0069", "s0089", "s0114", "s0293", "s0252", "s0204", "s0014", "s0043", "s0119", "s0025", "s0274", "s0077", "s0030", "s0261", "s0222", "s0160", "s0220", "s0323", "s0144", "s0107", "s0020", "s0023", "s0054", "s0106", "s0154", "s0244", "s0126", "s0212", "s0137", "s0050", "s0046", "s0115", "s0235", "s0187", "s0255", "s0243", "s0301", "s0021", "s0200", "s0213", "s0281", "s0134", "s0186", "s0300", "s0320", "s0105", "s0315", "s0038", "s0062", "s0024", "s0081", "s0064", "s0082", "s0091", "s0152", "s0076", "s0181", "s0171", "s0267", "s0120", "s0182", "s0143", "s0036", "s0173", "s0193", "s0277", "s0095", "s0168", "s0049", "s0032", "s0026", "s0249", "s0290", "s0237", "s0008", "s0132", "s0047", "s0151", "s0037", "s0214", "s0246", "s0224", "s0071", "s0061", "s0170", "s0087", "s0135", "s0009", "s0232", "s0040", "s0070", "s0068", "s0322", "s0321", "s0203", "s0101", "s0278", "s0259", "s0260", "s0231", "s0100", "s0189", "s0015", "s0163", "s0044", "s0201", "s0283", "s0325", "s0215", "s0088", "s0265", "s0276", "s0271", "s0288", "s0250", "s0162", "s0156", "s0236", "s0211", "s0042", "s0121", "s0010", "s0282", "s0317", "s0167", "s0303", "s0175", "s0002", "s0179", "s0133", "s0051", "s0280", "s0084", "s0083", "s0080", "s0079", "s0149", "s0284", "s0256", "s0233", "s0205", "s0228", "s0247", "s0102", "s0272", "s0210", "s0039", "s0056", "s0034", "s0108", "s0104", "s0033", "s0198", "s0118", "s0299", "s0286", "s0138", "s0285", "s0052", "s0264", "s0229", "s0165", "s0072", "s0016", "s0208", "s0122", "s0316", "s0289", "s0158", "s0048", "s0097", "s0124", "s0291", "s0254", "s0013", "s0067", "s0012", "s0216", "s0150", "s0177", "s0139", "s0145", "s0194", "s0223", "s0184", "s0113", "s0279", "s0238", "s0029", "s0078", "s0147", "s0196", "s0197", "s0192", "s0006", "s0269", "s0262", "s0055", "s0241", "s0169", "s0295", "s0172", "s0326", "s0153", "s0075", "s0019", "s0166", "s0125", "s0174", "s0258", "s0003", "s0112", "s0270", "s0240", "s0103", "s0090", "s0148", "s0313", "s0253", "s0085", "s0074", "s0111", "s0195", "s0053", "s0185", "s0140", "s0294", "s0028", "s0063", "s0217", "s0007", "s0327", "s0218", "s0226", "s0159", "s0273", "s0157", "s0035", "s0227", "s0324", "s0305", "s0225", "s0058", "s0188", "s0328", "s0142", "s0018", "s0242", "s0060", "s0096", "s0098", "s0011", "s0329", "s0057", "s0164", "s0146", "s0131", "s0004", "s0183", "s0266", "s0307", "s0306", "s0308", "s0094", "s0001", "s0178", "s0199", "s0302", "s0263", "s0116", "s0221", "s0130", "s0275", "s0022", "s0136", "s0207", "s0257", "s0180", "s0109", "s0206", "s0005", "s0155", "s0219", "s0191", "s0176", "s0059", "s0141", "s0041", "s0312", "s0314", "s0161", "s0298", "s0123", "s0297", "s0318", "s0117", "s0311", "s0248", "s0251", "s0287", "s0027", "s0230", "s0086"]
-    MITRE_ALL = ["attack." + item for item in MITRE_TECHNIQUES + MITRE_TECHNIQUE_NAMES + MITRE_TACTICS + MITRE_GROUPS + MITRE_SOFTWARE]
+    # @classmethod
+    # def setUpClass(cls):
+    #     print("Calling get_mitre_data()")
+    #     # Get Current Data from MITRE ATT&CK®
+    #     cls.MITRE_ALL = get_mitre_data()
+    #     print("Catched data - starting tests...")
 
-    path_to_rules = "rules"
+    # MITRE_TECHNIQUE_NAMES = [
+    #     "process_injection",
+    #     "signed_binary_proxy_execution",
+    #     "process_injection",
+    # ]  # incomplete list
+    # MITRE_TACTICS = [
+    #     "initial_access",
+    #     "execution",
+    #     "persistence",
+    #     "privilege_escalation",
+    #     "defense_evasion",
+    #     "credential_access",
+    #     "discovery",
+    #     "lateral_movement",
+    #     "collection",
+    #     "exfiltration",
+    #     "command_and_control",
+    #     "impact",
+    #     "launch",
+    # ]
+    # # Don't use trademarks in rules - they require non-ASCII characters to be used on we don't want them in our rules
+    TRADE_MARKS = {"MITRE ATT&CK", "ATT&CK"}
 
+    path_to_rules = [
+        "rules",
+        "rules-emerging-threats",
+        "rules-placeholder",
+        "rules-threat-hunting",
+        "rules-compliance",
+    ]
+
+    @classmethod
+    def setUpClass(cls):
+        cls._rule_file_paths = []
+        cls._yaml_cache: dict = {}
+        for path_ in cls.path_to_rules:
+            for root, _, files in os.walk(path_):
+                for file in files:
+                    if file.endswith(".yml"):
+                        cls._rule_file_paths.append(os.path.join(root, file))
 
     # Helper functions
-    def yield_next_rule_file_path(self, path_to_rules:str) -> str:
-        for root, _, files in os.walk(path_to_rules):
-            for file in files:
-                yield os.path.join(root, file)
+    def yield_next_rule_file_path(self, path_to_rules: list) -> "collections.abc.Iterator[str]":
+        if path_to_rules == self.path_to_rules and hasattr(self, "_rule_file_paths"):
+            total = len(self._rule_file_paths)
+            last_pct = -1
+            tty = sys.stdout.isatty()
+            for i, file_path in enumerate(self._rule_file_paths, 1):
+                if tty:
+                    pct = i * 100 // total
+                    if pct != last_pct:
+                        print(f"\r  {pct:3d}% ({i}/{total})", end="", flush=True)
+                        last_pct = pct
+                yield file_path
+            if tty:
+                print()
+        else:
+            for path_ in path_to_rules:
+                for root, _, files in os.walk(path_):
+                    for file in files:
+                        if file.endswith(".yml"):
+                            yield os.path.join(root, file)
 
-
-    def get_rule_part(self, file_path:str, part_name:str):
+    def get_rule_part(self, file_path: str, part_name: str):
         yaml_dicts = self.get_rule_yaml(file_path)
         for yaml_part in yaml_dicts:
             if part_name in yaml_part.keys():
@@ -37,107 +104,159 @@ class TestRules(unittest.TestCase):
 
         return None
 
-
-    def get_rule_yaml(self, file_path:str) -> dict:
-        data = []
-
-        with open(file_path) as f:
-            yaml_parts = yaml.safe_load_all(f)
-            for part in yaml_parts:
-                data.append(part)
-
-        return data
-
+    def get_rule_yaml(self, file_path: str) -> list:
+        if file_path not in self._yaml_cache:
+            with open(file_path, encoding="utf-8") as f:
+                self._yaml_cache[file_path] = tuple(yaml.safe_load_all(f))
+        return [copy.deepcopy(part) for part in self._yaml_cache[file_path]]
 
     # Tests
-    def test_confirm_extension_is_yml(self):
-        files_with_incorrect_extensions = []
+    def test_legal_trademark_violations(self):
+        # See Issue # https://github.com/SigmaHQ/sigma/issues/1028
+        files_with_legal_issues = []
 
         for file in self.yield_next_rule_file_path(self.path_to_rules):
-            file_name_and_extension = os.path.splitext(file)
-            if len(file_name_and_extension) == 2:
-                extension = file_name_and_extension[1]
-                if extension != ".yml":
-                    files_with_incorrect_extensions.append(file)
+            with open(file, "r", encoding="utf-8") as fh:
+                file_data = fh.read()
+                for tm in self.TRADE_MARKS:
+                    if tm in file_data:
+                        files_with_legal_issues.append(file)
 
-        self.assertEqual(files_with_incorrect_extensions, [],
-                        "There are rule files with extensions other than .yml")
+        self.assertEqual(
+            files_with_legal_issues,
+            [],
+            Fore.RED
+            + "There are rule files which contains a trademark or reference that doesn't comply with the respective trademark requirements - please remove the trademark to avoid legal issues",
+        )
 
+    # sigma cli SigmahqFieldDuplicateValueIssue
+    # def test_look_for_duplicate_filters(self):
+    #     def check_list_or_recurse_on_dict(item, depth: int, special: bool) -> None:
+    #         if type(item) == list:
+    #             check_if_list_contain_duplicates(item, depth, special)
+    #         elif type(item) == dict and depth <= MAX_DEPTH:
+    #             for keys, sub_item in item.items():
+    #                 if (
+    #                     "|base64" in keys or "|re" in keys
+    #                 ):  # Covers both "base64" and "base64offset" modifiers, and "re" modifier
+    #                     check_list_or_recurse_on_dict(sub_item, depth + 1, True)
+    #                 else:
+    #                     check_list_or_recurse_on_dict(sub_item, depth + 1, special)
 
-    def test_confirm_correct_mitre_tags(self):
-        files_with_incorrect_mitre_tags = []
+    #     def check_if_list_contain_duplicates(
+    #         item: list, depth: int, special: bool
+    #     ) -> None:
+    #         try:
+    #             # We use a list comprehension to convert all the element to lowercase. Since we don't care about casing in SIGMA except for the following modifiers
+    #             #   - "base64offset"
+    #             #   - "base64"
+    #             #   - "re"
+    #             if special:
+    #                 item_ = item
+    #             else:
+    #                 item_ = [i.lower() for i in item]
+    #             if len(item_) != len(set(item_)):
+    #                 # We find the duplicates and then print them to the user
+    #                 duplicates = [
+    #                     i
+    #                     for i, count in collections.Counter(item_).items()
+    #                     if count > 1
+    #                 ]
+    #                 print(
+    #                     Fore.RED
+    #                     + "Rule {} has duplicate filters {}".format(file, duplicates)
+    #                 )
+    #                 files_with_duplicate_filters.append(file)
+    #         except:
+    #             # unhashable types like dictionaries
+    #             for sub_item in item:
+    #                 if type(sub_item) == dict and depth <= MAX_DEPTH:
+    #                     check_list_or_recurse_on_dict(sub_item, depth + 1, special)
 
-        for file in self.yield_next_rule_file_path(self.path_to_rules):
-            tags = self.get_rule_part(file_path=file, part_name="tags")
-            if tags:
-                for tag in tags:
-                    if tag not in self.MITRE_ALL and tag.startswith("attack."):
-                        print("Rule {} has the following incorrect tag {}".format(file, tag))
-                        files_with_incorrect_mitre_tags.append(file)
+    #     MAX_DEPTH = 3
+    #     files_with_duplicate_filters = []
 
-        self.assertEqual(files_with_incorrect_mitre_tags, [],
-                         "There are rules with incorrect MITRE Tags")
+    #     for file in self.yield_next_rule_file_path(self.path_to_rules):
+    #         detection = self.get_rule_part(file_path=file, part_name="detection")
+    #         check_list_or_recurse_on_dict(detection, 1, False)
 
+    #     self.assertEqual(
+    #         files_with_duplicate_filters,
+    #         [],
+    #         Fore.RED + "There are rules with duplicate filters",
+    #     )
 
-    def test_look_for_duplicate_filters(self):
-        def check_list_or_recurse_on_dict(item, depth:int) -> None:
-            if type(item) == list:
-                check_if_list_contain_duplicates(item, depth)
-            elif type(item) == dict and depth <= MAX_DEPTH:
-                for sub_item in item.values():
-                    check_list_or_recurse_on_dict(sub_item, depth + 1)
+    #sigma cli SigmahqFieldWithSpaceIssue
+    # def test_field_name_with_space(self):
+    #     def key_iterator(fields, faulty):
+    #         for key, value in fields.items():
+    #             if " " in key:
+    #                 faulty.append(key)
+    #                 print(
+    #                     Fore.YELLOW
+    #                     + "Rule {} has a space in field name ({}).".format(file, key)
+    #                 )
+    #             if type(value) == dict:
+    #                 key_iterator(value, faulty)
 
-        def check_if_list_contain_duplicates(item:list, depth:int) -> None:
-            try:
-                if len(item) != len(set(item)):
-                    print("Rule {} has duplicate filters".format(file))
-                    files_with_duplicate_filters.append(file)
-            except:
-                # unhashable types like dictionaries
-                for sub_item in item:
-                    if type(sub_item) == dict and depth <= MAX_DEPTH:
-                        check_list_or_recurse_on_dict(sub_item, depth + 1)
+    #     faulty_fieldnames = []
+    #     for file in self.yield_next_rule_file_path(self.path_to_rules):
+    #         detection = self.get_rule_part(file_path=file, part_name="detection")
+    #         key_iterator(detection, faulty_fieldnames)
 
-        MAX_DEPTH = 3
-        files_with_duplicate_filters = []
+    #     self.assertEqual(
+    #         faulty_fieldnames,
+    #         [],
+    #         Fore.RED
+    #         + "There are rules with an unsupported field name. Spaces are not allowed. (Replace space with an underscore character '_' )",
+    #     )
 
-        for file in self.yield_next_rule_file_path(self.path_to_rules):
-            detection = self.get_rule_part(file_path=file, part_name="detection")
-            check_list_or_recurse_on_dict(detection, 1)
+    #sigma cli AllOfThemConditionIssue
+    # def test_single_named_condition_with_x_of_them(self):
+    #     faulty_detections = []
 
-        self.assertEqual(files_with_duplicate_filters, [],
-                         "There are rules with duplicate filters")
+    #     for file in self.yield_next_rule_file_path(self.path_to_rules):
+    #         yaml = self.get_rule_yaml(file_path=file)
+    #         detection = self.get_rule_part(file_path=file, part_name="detection")
 
+    #         has_them_in_condition = "them" in detection["condition"]
+    #         has_only_one_named_condition = len(detection) == 2
+    #         not_multipart_yaml_file = len(yaml) == 1
 
-    def test_single_named_condition_with_x_of_them(self):
-        faulty_detections = []
+    #         if (
+    #             has_them_in_condition
+    #             and has_only_one_named_condition
+    #             and not_multipart_yaml_file
+    #         ):
+    #             faulty_detections.append(file)
 
-        for file in self.yield_next_rule_file_path(self.path_to_rules):
-            yaml = self.get_rule_yaml(file_path = file)
-            detection = self.get_rule_part(file_path = file, part_name = "detection")
+    #     self.assertEqual(
+    #         faulty_detections,
+    #         [],
+    #         Fore.RED
+    #         + "There are rules using '1/all of them' style conditions but only have one condition",
+    #     )
 
-            has_them_in_condition = "them" in detection["condition"]
-            has_only_one_named_condition = len(detection) == 2
-            not_multipart_yaml_file = len(yaml) == 1
+    def test_duplicate_detections(self):
+        def compare_detections(detection1: dict, detection2: dict) -> bool:
+            # If they have different log sources. They can't be the same
+            # We first remove any definitions fields (if there are any) in the logsource to avoid typos
+            detection1["logsource"].pop("definition", None)
+            detection2["logsource"].pop("definition", None)
 
-            if has_them_in_condition and \
-                has_only_one_named_condition and \
-                    not_multipart_yaml_file:
-                faulty_detections.append(file)
+            if detection1["logsource"] != detection2["logsource"]:
+                return False
 
-        self.assertEqual(faulty_detections, [],
-                         "There are rules using '1/all of them' style conditions but only have one condition")
-
-
-    def test_duplicate_titles(self):
-        def compare_detections(detection1:dict, detection2:dict) -> bool:
-
-            # detections not the same length can't be the same
+            # detections not the same count can't be the same
             if len(detection1) != len(detection2):
                 return False
 
             for named_condition in detection1:
-                # condition clause must be the same too 
+                # don't check timeframes
+                if named_condition == "timeframe":
+                    continue
+
+                # condition clause must be the same too
                 if named_condition == "condition":
                     if detection1["condition"] != detection2["condition"]:
                         return False
@@ -148,6 +267,7 @@ class TestRules(unittest.TestCase):
                 if named_condition not in detection2:
                     return False
 
+                # can not be the same  if len is not equal
                 if len(detection1[named_condition]) != len(detection2[named_condition]):
                     return False
 
@@ -158,8 +278,16 @@ class TestRules(unittest.TestCase):
                     if condition not in detection2[named_condition]:
                         return False
 
-                    condition_value1 = detection1[named_condition][condition]
-                    condition_value2 = detection2[named_condition][condition]
+                    # We add this check in case of keyword rules. Where no field is used. The parser returns a list instead of a dict
+                    # If the 2 list are different that means they aren't the same
+                    if (type(detection1[named_condition]) == list) or (
+                        type(detection2[named_condition]) == list
+                    ):
+                        condition_value1 = detection1[named_condition]
+                        condition_value2 = detection2[named_condition]
+                    else:
+                        condition_value1 = detection1[named_condition][condition]
+                        condition_value2 = detection2[named_condition][condition]
 
                     if condition_value1 != condition_value2:
                         return False
@@ -170,8 +298,11 @@ class TestRules(unittest.TestCase):
         files_and_their_detections = {}
 
         for file in self.yield_next_rule_file_path(self.path_to_rules):
-            detection = self.get_rule_part(file_path = file, part_name = "detection")
-            yaml = self.get_rule_yaml(file_path = file)
+            detection = self.get_rule_part(file_path=file, part_name="detection")
+            logsource = self.get_rule_part(file_path=file, part_name="logsource")
+            detection["logsource"] = {}
+            detection["logsource"].update(logsource)
+            yaml = self.get_rule_yaml(file_path=file)
 
             is_multipart_yaml_file = len(yaml) != 1
             if is_multipart_yaml_file:
@@ -183,34 +314,1731 @@ class TestRules(unittest.TestCase):
 
             files_and_their_detections[file] = detection
 
-        self.assertEqual(faulty_detections, [],
-                         "There are rule files with exactly the same detection logic.")
-
+        self.assertEqual(
+            faulty_detections,
+            [],
+            Fore.YELLOW + "There are rule files with exactly the same detection logic.",
+        )
 
     def test_source_eventlog(self):
         faulty_detections = []
 
         for file in self.yield_next_rule_file_path(self.path_to_rules):
-            detection = self.get_rule_part(file_path = file, part_name = "detection")
+            detection = self.get_rule_part(file_path=file, part_name="detection")
             detection_str = str(detection).lower()
             if "'source': 'eventlog'" in detection_str:
                 faulty_detections.append(file)
 
-        self.assertEqual(faulty_detections, [],
-                         "There are detections with 'Source: Eventlog'. This does not add value to the detection.")
-
+        self.assertEqual(
+            faulty_detections,
+            [],
+            Fore.YELLOW
+            + "There are detections with 'Source: Eventlog'. This does not add value to the detection.",
+        )
 
     def test_event_id_instead_of_process_creation(self):
         faulty_detections = []
         for file in self.yield_next_rule_file_path(self.path_to_rules):
-            with open(file) as f:
+            with open(file, encoding="utf-8") as f:
                 for line in f:
-                    if re.search(r'.*EventID: (?:1|4688)\s*$', line) and file not in faulty_detections:
-                        faulty_detections.append(file)
+                    if (
+                        re.search(r".*EventID: (?:1|4688)\s*$", line)
+                        and file not in faulty_detections
+                    ):
+                        detection = self.get_rule_part(
+                            file_path=file, part_name="detection"
+                        )
+                        if detection:
+                            for search_identifier in detection:
+                                if isinstance(detection[search_identifier], dict):
+                                    for field in detection[search_identifier]:
+                                        if "Provider_Name" in field:
+                                            if isinstance(
+                                                detection[search_identifier][
+                                                    "Provider_Name"
+                                                ],
+                                                list,
+                                            ):
+                                                for value in detection[
+                                                    search_identifier
+                                                ]["Provider_Name"]:
+                                                    if (
+                                                        "Microsoft-Windows-Security-Auditing"
+                                                        in value
+                                                        or "Microsoft-Windows-Sysmon"
+                                                        in value
+                                                    ):
+                                                        if (
+                                                            file
+                                                            not in faulty_detections
+                                                        ):
+                                                            faulty_detections.append(
+                                                                file
+                                                            )
+                                            else:
+                                                if (
+                                                    "Microsoft-Windows-Security-Auditing"
+                                                    in detection[search_identifier][
+                                                        "Provider_Name"
+                                                    ]
+                                                    or "Microsoft-Windows-Sysmon"
+                                                    in detection[search_identifier][
+                                                        "Provider_Name"
+                                                    ]
+                                                ):
+                                                    if file not in faulty_detections:
+                                                        faulty_detections.append(file)
 
-        self.assertEqual(faulty_detections, [],
-                         "There are rules still using Sysmon 1 or Event ID 4688. Please migrate to the process_creation category.")
+        self.assertEqual(
+            faulty_detections,
+            [],
+            Fore.YELLOW
+            + "There are rules still using Sysmon 1 or Event ID 4688. Please migrate to the process_creation category.",
+        )
+
+    def test_sysmon_rule_without_eventid(self):
+        faulty_rules = []
+        for file in self.yield_next_rule_file_path(self.path_to_rules):
+            logsource = self.get_rule_part(file_path=file, part_name="logsource")
+            if logsource:
+                service = logsource.get("service", "")
+                if service.lower() == "sysmon":
+                    with open(file, encoding="utf-8") as f:
+                        found = False
+                        for line in f:
+                            # might be on a single line or in multiple lines
+                            if re.search(r".*EventID:.*$", line):
+                                found = True
+                                break
+                        if not found:
+                            faulty_rules.append(file)
+
+        self.assertEqual(
+            faulty_rules,
+            [],
+            Fore.RED
+            + "There are rules using sysmon events but with no EventID specified",
+        )
+
+    # sigma cli SigmahqFalsepositivesCapitalIssue
+    # def test_optional_falsepositives_capital(self):
+    #     faulty_rules = []
+    #     for file in self.yield_next_rule_file_path(self.path_to_rules):
+    #         fps = self.get_rule_part(file_path=file, part_name="falsepositives")
+    #         if fps:
+    #             for fp in fps:
+    #                 # first letter should be capital
+    #                 try:
+    #                     if fp[0].upper() != fp[0]:
+    #                         print(
+    #                             Fore.YELLOW
+    #                             + "Rule {} defines a falsepositive that does not start with a capital letter: '{}'.".format(
+    #                                 file, fp
+    #                             )
+    #                         )
+    #                         faulty_rules.append(file)
+    #                 except TypeError as err:
+    #                     print("TypeError Exception for rule {}".format(file))
+    #                     print("Error: {}".format(err))
+    #                     print("Maybe you created an empty falsepositive item?")
+
+    #     self.assertEqual(
+    #         faulty_rules,
+    #         [],
+    #         Fore.RED
+    #         + "There are rules with false positives that don't start with a capital letter (e.g. 'unknown' should be 'Unknown')",
+    #     )
+
+    # sigma cli SigmahqFalsepositivesBannedWordIssue
+    # def test_optional_falsepositives_blocked_content(self):
+    #     faulty_rules = []
+    #     banned_words = ["none", "pentest", "penetration test"]
+    #     common_typos = ["unkown", "ligitimate", "legitim ", "legitimeate"]
+    #     for file in self.yield_next_rule_file_path(self.path_to_rules):
+    #         fps = self.get_rule_part(file_path=file, part_name="falsepositives")
+    #         if fps:
+    #             for fp in fps:
+    #                 for typo in common_typos:
+    #                     if fp == "Unknow" or typo in fp.lower():
+    #                         print(
+    #                             Fore.YELLOW
+    #                             + "Rule {} defines a falsepositive with a common typo: '{}'.".format(
+    #                                 file, typo
+    #                             )
+    #                         )
+    #                         faulty_rules.append(file)
+    #                 for banned_word in banned_words:
+    #                     if banned_word in fp.lower():
+    #                         print(
+    #                             Fore.YELLOW
+    #                             + "Rule {} defines a falsepositive with an invalid reason: '{}'.".format(
+    #                                 file, banned_word
+    #                             )
+    #                         )
+    #                         faulty_rules.append(file)
+
+    #     self.assertEqual(
+    #         faulty_rules,
+    #         [],
+    #         Fore.RED
+    #         + "There are rules with invalid false positive definitions (e.g. Pentest, None or common typos)",
+    #     )
+
+    def test_optional_license(self):
+        faulty_rules = []
+        for file in self.yield_next_rule_file_path(self.path_to_rules):
+            license_str = self.get_rule_part(file_path=file, part_name="license")
+            if license_str:
+                if not isinstance(license_str, str):
+                    print(
+                        Fore.YELLOW
+                        + "Rule {} has a malformed 'license' (has to be a string).".format(
+                            file
+                        )
+                    )
+                    faulty_rules.append(file)
+
+        self.assertEqual(
+            faulty_rules,
+            [],
+            Fore.RED
+            + "There are rules with malformed 'license' fields. (has to be a string )",
+        )
+
+    # sigma cli SigmaReferencesError
+    # def test_references(self):
+    #     faulty_rules = []
+    #     for file in self.yield_next_rule_file_path(self.path_to_rules):
+    #         references = self.get_rule_part(file_path=file, part_name="references")
+    #         # Reference field doesn't exist
+    #         # if not references:
+    #         # print(Fore.YELLOW + "Rule {} has no field 'references'.".format(file))
+    #         # faulty_rules.append(file)
+    #         if references:
+    #             # it exists but isn't a list
+    #             if not isinstance(references, list):
+    #                 print(
+    #                     Fore.YELLOW
+    #                     + "Rule {} has a references field that isn't a list.".format(
+    #                         file
+    #                     )
+    #                 )
+    #                 faulty_rules.append(file)
+
+    #     self.assertEqual(
+    #         faulty_rules,
+    #         [],
+    #         Fore.RED
+    #         + "There are rules with malformed 'references' fields. (has to be a list of values even if it contains only a single value)",
+    #     )
+
+    # sigme cli SigmahqLinkDescriptionIssue
+    # def test_references_in_description(self):
+    #     # This test checks for the presence of a links and special keywords in the "description" field while there is no "references" field.
+    #     faulty_rules = []
+    #     for file in self.yield_next_rule_file_path(self.path_to_rules):
+    #         references = self.get_rule_part(file_path=file, part_name="references")
+    #         # Reference field doesn't exist
+    #         if not references:
+    #             descriptionfield = self.get_rule_part(
+    #                 file_path=file, part_name="description"
+    #             )
+    #             if descriptionfield:
+    #                 for i in [
+    #                     "http://",
+    #                     "https://",
+    #                     "internal research",
+    #                 ]:  # Extends the list with other common references starters
+    #                     if i in descriptionfield.lower():
+    #                         print(
+    #                             Fore.RED
+    #                             + "Rule {} has a field that contains references to external links but no references set. Add a 'references' key and add URLs as list items.".format(
+    #                                 file
+    #                             )
+    #                         )
+    #                         faulty_rules.append(file)
+
+    #     self.assertEqual(
+    #         faulty_rules,
+    #         [],
+    #         Fore.RED
+    #         + "There are rules with malformed 'description' fields. (links and external references have to be in a seperate field named 'references'. see specification https://github.com/SigmaHQ/sigma-specification)",
+    #     )
+
+    def test_file_names(self):
+        faulty_rules = []
+        name_lst = []
+        filename_pattern = re.compile(r"[a-z0-9_]{10,90}\.yml")
+        for file in self.yield_next_rule_file_path(self.path_to_rules):
+            filename = os.path.basename(file)
+            if filename in name_lst:
+                print(Fore.YELLOW + "Rule {} is a duplicate file name.".format(file))
+                faulty_rules.append(file)
+            elif filename[-4:] != ".yml":
+                print(
+                    Fore.YELLOW + "Rule {} has a invalid extension (.yml).".format(file)
+                )
+                faulty_rules.append(file)
+            elif len(filename) > 90:
+                print(
+                    Fore.YELLOW + "Rule {} has a file name too long >90.".format(file)
+                )
+                faulty_rules.append(file)
+            elif len(filename) < 14:
+                print(
+                    Fore.YELLOW + "Rule {} has a file name too short <14.".format(file)
+                )
+                faulty_rules.append(file)
+            elif filename_pattern.match(filename) == None or not "_" in filename:
+                print(
+                    Fore.YELLOW
+                    + "Rule {} has a file name that doesn't match our standard.".format(
+                        file
+                    )
+                )
+                faulty_rules.append(file)
+            else:
+                # This test make sure that every rules has a filename that corresponds to
+                # It's specific logsource.
+                # Fix Issue #1381 (https://github.com/SigmaHQ/sigma/issues/1381)
+                logsource = self.get_rule_part(file_path=file, part_name="logsource")
+                if logsource:
+                    pattern_prefix = ""
+                    os_infix = ""
+                    os_bool = False
+                    for key, value in logsource.items():
+                        if key == "definition":
+                            pass
+                        else:
+                            if key == "product":
+                                # This is to get the OS for certain categories
+                                if value == "windows":
+                                    os_infix = "win_"
+                                elif value == "macos":
+                                    os_infix = "macos_"
+                                elif value == "linux":
+                                    os_infix = "lnx_"
+                                # For other stuff
+                                elif value == "aws":
+                                    pattern_prefix = "aws_"
+                                elif value == "azure":
+                                    pattern_prefix = "azure_"
+                                elif value == "gcp":
+                                    pattern_prefix = "gcp_"
+                                elif value == "m365":
+                                    pattern_prefix = "microsoft365_"
+                                elif value == "okta":
+                                    pattern_prefix = "okta_"
+                                elif value == "onelogin":
+                                    pattern_prefix = "onelogin_"
+                                elif value == "github":
+                                    pattern_prefix = "github_"
+                                elif value == "fortinet":
+                                    pattern_prefix = "fortinet_"
+                            elif key == "category":
+                                if value == "process_creation":
+                                    pattern_prefix = "proc_creation_"
+                                    os_bool = True
+                                elif value == "image_load":
+                                    pattern_prefix = "image_load_"
+                                elif value == "file_event":
+                                    pattern_prefix = "file_event_"
+                                    os_bool = True
+                                elif value == "registry_set":
+                                    pattern_prefix = "registry_set_"
+                                elif value == "registry_add":
+                                    pattern_prefix = "registry_add_"
+                                elif value == "registry_event":
+                                    pattern_prefix = "registry_event_"
+                                elif value == "registry_delete":
+                                    pattern_prefix = "registry_delete_"
+                                elif value == "registry_rename":
+                                    pattern_prefix = "registry_rename_"
+                                elif value == "process_access":
+                                    pattern_prefix = "proc_access_"
+                                    os_bool = True
+                                elif value == "driver_load":
+                                    pattern_prefix = "driver_load_"
+                                    os_bool = True
+                                elif value == "dns_query":
+                                    pattern_prefix = "dns_query_"
+                                    os_bool = True
+                                elif value == "ps_script":
+                                    pattern_prefix = "posh_ps_"
+                                elif value == "ps_module":
+                                    pattern_prefix = "posh_pm_"
+                                elif value == "ps_classic_start":
+                                    pattern_prefix = "posh_pc_"
+                                elif value == "pipe_created":
+                                    pattern_prefix = "pipe_created_"
+                                elif value == "network_connection":
+                                    pattern_prefix = "net_connection_"
+                                    os_bool = True
+                                elif value == "file_rename":
+                                    pattern_prefix = "file_rename_"
+                                    os_bool = True
+                                elif value == "file_delete":
+                                    pattern_prefix = "file_delete_"
+                                    os_bool = True
+                                elif value == "file_change":
+                                    pattern_prefix = "file_change_"
+                                    os_bool = True
+                                elif value == "file_access":
+                                    pattern_prefix = "file_access_"
+                                    os_bool = True
+                                elif value == "create_stream_hash":
+                                    pattern_prefix = "create_stream_hash_"
+                                elif value == "create_remote_thread":
+                                    pattern_prefix = "create_remote_thread_win_"
+                                elif value == "dns":
+                                    pattern_prefix = "net_dns_"
+                                elif value == "firewall":
+                                    pattern_prefix = "net_firewall_"
+                                elif value == "webserver":
+                                    pattern_prefix = "web_"
+                            elif key == "service":
+                                if value == "auditd":
+                                    pattern_prefix = "lnx_auditd_"
+                                elif value == "modsecurity":
+                                    pattern_prefix = "modsec_"
+                                elif value == "diagnosis-scripted":
+                                    pattern_prefix = "win_diagnosis_scripted_"
+                                elif value == "firewall-as":
+                                    pattern_prefix = "win_firewall_as_"
+                                elif value == "msexchange-management":
+                                    pattern_prefix = "win_exchange_"
+                                elif value == "security":
+                                    pattern_prefix = "win_security_"
+                                elif value == "system":
+                                    pattern_prefix = "win_system_"
+                                elif value == "taskscheduler":
+                                    pattern_prefix = "win_taskscheduler_"
+                                elif value == "terminalservices-localsessionmanager":
+                                    pattern_prefix = "win_terminalservices_"
+                                elif value == "windefend":
+                                    pattern_prefix = "win_defender_"
+                                elif value == "wmi":
+                                    pattern_prefix = "win_wmi_"
+                                elif value == "codeintegrity-operational":
+                                    pattern_prefix = "win_codeintegrity_"
+                                elif value == "bits-client":
+                                    pattern_prefix = "win_bits_client_"
+                                elif value == "applocker":
+                                    pattern_prefix = "win_applocker_"
+                                elif value == "dns-server-analytic":
+                                    pattern_prefix = "win_dns_analytic_"
+                                elif value == "bitlocker":
+                                    pattern_prefix = "win_bitlocker_"
+                                elif value == "capi2":
+                                    pattern_prefix = "win_capi2_"
+                                elif (
+                                    value
+                                    == "certificateservicesclient-lifecycle-system"
+                                ):
+                                    pattern_prefix = "win_certificateservicesclient_lifecycle_system_"
+                                elif value == "pim":
+                                    pattern_prefix = "azure_pim_"
+
+                    # This value is used to test if we should add the OS infix for certain categories
+                    if os_bool:
+                        pattern_prefix += os_infix
+                    if pattern_prefix != "":
+                        if not filename.startswith(pattern_prefix):
+                            for key, value in logsource.items():
+                                if key in ["category", "service", "product"]:
+                                    print(
+                                        Fore.YELLOW
+                                        + "Rule {} has inconsistency between filename '{}' and logsource ({}: '{}'):".format(
+                                            file, filename, key, value
+                                        )
+                                    )
+                            if file not in faulty_rules:
+                                faulty_rules.append(file)
+            name_lst.append(filename)
+
+        self.assertEqual(
+            faulty_rules,
+            [],
+            Fore.RED
+            + r"There are rules with malformed file names (too short, too long, uppercase letters, a minus sign etc.). Please see the file names used in our repository and adjust your file names accordingly. The pattern for a valid file name is \'[a-z0-9_]{10,90}\.yml\' and it has to contain at least an underline character. It also has to follow the following naming convention https://github.com/SigmaHQ/sigma-specification/blob/main/specification/sigma-rules-specification.md#yaml-file",
+        )
+
+    # sigma cli sigmahq_title_caseIssue, sigmahq_title_endIssue, sigmahq_title_lengthIssue, sigmahq_title_startIssue
+    # def test_title(self):
+    #     faulty_rules = []
+    #     allowed_lowercase_words = [
+    #         "the",
+    #         "for",
+    #         "in",
+    #         "with",
+    #         "via",
+    #         "on",
+    #         "to",
+    #         "without",
+    #         "of",
+    #         "through",
+    #         "from",
+    #         "by",
+    #         "as",
+    #         "a",
+    #         "or",
+    #         "at",
+    #         "and",
+    #         "an",
+    #         "over",
+    #         "new",
+    #     ]
+    #     for file in self.yield_next_rule_file_path(self.path_to_rules):
+    #         title = self.get_rule_part(file_path=file, part_name="title")
+    #         if not title:
+    #             print(Fore.RED + "Rule {} has no field 'title'.".format(file))
+    #             faulty_rules.append(file)
+    #             continue
+    #         elif len(title) > 110:
+    #             print(
+    #                 Fore.YELLOW
+    #                 + "Rule {} has a title field with too many characters (>110)".format(
+    #                     file
+    #                 )
+    #             )
+    #             faulty_rules.append(file)
+    #         if title.startswith("Detects "):
+    #             print(
+    #                 Fore.RED
+    #                 + "Rule {} has a title that starts with 'Detects'".format(file)
+    #             )
+    #             faulty_rules.append(file)
+    #         if title.endswith("."):
+    #             print(Fore.RED + "Rule {} has a title that ends with '.'".format(file))
+    #             faulty_rules.append(file)
+    #         wrong_casing = []
+    #         for word in title.split(" "):
+    #             if (
+    #                 word.islower()
+    #                 and not word.lower() in allowed_lowercase_words
+    #                 and not "." in word
+    #                 and not "/" in word
+    #                 and not "_" in word
+    #                 and not word[0].isdigit()
+    #             ):
+    #                 wrong_casing.append(word)
+    #         if len(wrong_casing) > 0:
+    #             print(
+    #                 Fore.RED
+    #                 + "Rule {} has a title that has not title capitalization. Words: '{}'".format(
+    #                     file, ", ".join(wrong_casing)
+    #                 )
+    #             )
+    #             faulty_rules.append(file)
+
+    #     self.assertEqual(
+    #         faulty_rules,
+    #         [],
+    #         Fore.RED
+    #         + "There are rules with non-conform 'title' fields. Please check: https://github.com/SigmaHQ/sigma/wiki/Rule-Creation-Guide#title",
+    #     )
+
+    def test_title_in_first_line(self):
+        faulty_rules = []
+        for file in self.yield_next_rule_file_path(self.path_to_rules):
+            yaml = self.get_rule_yaml(file)
+
+            # skip multi-part yaml
+            if len(yaml) > 1:
+                continue
+
+            # this probably is not the best way to check whether
+            # title is the attribute given in the 1st line
+            # (also assumes dict keeps the order from the input file)
+            if list(yaml[0].keys())[0] != "title":
+                print(
+                    Fore.RED
+                    + "Rule {} does not have its 'title' attribute in the first line".format(
+                        file
+                    )
+                )
+                faulty_rules.append(file)
+
+        self.assertEqual(
+            faulty_rules,
+            [],
+            Fore.RED
+            + "There are rules without the 'title' attribute in their first line.",
+        )
+
+    def test_selection_list_one_value(self):
+        def treat_list(file, values, valid_, selection_name):
+            # rule with only list of Keywords term
+            if len(values) == 1 and not isinstance(values[0], str):
+                print(
+                    Fore.RED
+                    + "Rule {} has the selection ({}) with a list of only 1 element in detection".format(
+                        file, selection_name
+                    )
+                )
+                valid_ = False
+            elif isinstance(values[0], dict):
+                valid_ = treat_dict(file, values, valid_, selection_name)
+            return valid_
+
+        def treat_dict(file, values, valid_, selection_name):
+            if isinstance(values, list):
+                for dict_ in values:
+                    for key_ in dict_.keys():
+                        if isinstance(dict_[key_], list):
+                            if len(dict_[key_]) == 1:
+                                print(
+                                    Fore.RED
+                                    + "Rule {} has the selection ({}/{}) with a list of only 1 value in detection".format(
+                                        file, selection_name, key_
+                                    )
+                                )
+                                valid_ = False
+            else:
+                dict_ = values
+                for key_ in dict_.keys():
+                    if isinstance(dict_[key_], list):
+                        if len(dict_[key_]) == 1:
+                            print(
+                                Fore.RED
+                                + "Rule {} has the selection ({}/{}) with a list of only 1 value in detection".format(
+                                    file, selection_name, key_
+                                )
+                            )
+                            valid_ = False
+            return valid_
+
+        faulty_rules = []
+        for file in self.yield_next_rule_file_path(self.path_to_rules):
+            detection = self.get_rule_part(file_path=file, part_name="detection")
+            if detection:
+                valid = True
+                for key in detection:
+                    values = detection[key]
+                    if isinstance(detection[key], list):
+                        valid = treat_list(file, values, valid, key)
+
+                    if isinstance(detection[key], dict):
+                        valid = treat_dict(file, values, valid, key)
+
+                    if not valid:
+                        faulty_rules.append(file)
+
+        self.assertEqual(
+            faulty_rules,
+            [],
+            Fore.RED + "There are rules using list with only 1 element",
+        )
+
+    # simga cli SigmahqSigmacIssue
+    # def test_selection_start_or_and(self):
+    #     faulty_rules = []
+    #     for file in self.yield_next_rule_file_path(self.path_to_rules):
+    #         detection = self.get_rule_part(file_path=file, part_name="detection")
+    #         if detection:
+    #             # This test is a best effort to avoid breaking SIGMAC parser. You could do more testing and try to fix this once and for all by modifying the token regular expressions https://github.com/SigmaHQ/sigma/blob/b9ae5303f12cda8eb6b5b90a32fd7f11ad65645d/tools/sigma/parser/condition.py#L107-L127
+    #             for key in detection:
+    #                 if key[:3].lower() == "sel":
+    #                     continue
+    #                 elif key[:2].lower() == "or":
+    #                     print(
+    #                         Fore.RED
+    #                         + "Rule {} has a selection '{}' that starts with the string 'or'".format(
+    #                             file, key
+    #                         )
+    #                     )
+    #                     faulty_rules.append(file)
+    #                 elif key[:3].lower() == "and":
+    #                     print(
+    #                         Fore.RED
+    #                         + "Rule {} has a selection '{}' that starts with the string 'and'".format(
+    #                             file, key
+    #                         )
+    #                     )
+    #                     faulty_rules.append(file)
+    #                 elif key[:3].lower() == "not":
+    #                     print(
+    #                         Fore.RED
+    #                         + "Rule {} has a selection '{}' that starts with the string 'not'".format(
+    #                             file, key
+    #                         )
+    #                     )
+    #                     faulty_rules.append(file)
+
+    #     self.assertEqual(
+    #         faulty_rules,
+    #         [],
+    #         Fore.RED
+    #         + "There are rules with bad selection names. Can't start a selection name with an 'or*' or an 'and*' or a 'not*' ",
+    #     )
+
+    # sigma validator dangling_detection
+    # def test_unused_selection(self):
+    #     faulty_rules = []
+    #     for file in self.yield_next_rule_file_path(self.path_to_rules):
+    #         detection = self.get_rule_part(file_path=file, part_name="detection")
+    #         condition = detection["condition"]
+    #         wildcard_selections = re.compile(r"\sof\s([\w\*]+)(?:$|\s|\))")
+
+    #         # skip rules containing aggregations
+    #         if type(condition) == list:
+    #             continue
+
+    #         for selection in detection:
+    #             if selection == "condition":
+    #                 continue
+    #             if selection == "timeframe":
+    #                 continue
+
+    #             # remove special keywords
+    #             condition_list = (
+    #                 condition.replace("not ", "")
+    #                 .replace("1 of ", "")
+    #                 .replace("all of ", "")
+    #                 .replace(" or ", " ")
+    #                 .replace(" and ", " ")
+    #                 .replace("(", "")
+    #                 .replace(")", "")
+    #                 .split(" ")
+    #             )
+    #             if selection in condition_list:
+    #                 continue
+
+    #             # find all wildcards in condition
+    #             found = False
+    #             for wildcard_selection in wildcard_selections.findall(condition):
+    #                 # wildcard matches selection
+    #                 if (
+    #                     re.search(wildcard_selection.replace(r"*", r".*"), selection)
+    #                     is not None
+    #                 ):
+    #                     found = True
+    #                     break
+    #             # selection was not found in condition
+    #             if not found:
+    #                 print(
+    #                     Fore.RED
+    #                     + "Rule {} has an unused selection '{}'".format(file, selection)
+    #                 )
+    #                 faulty_rules.append(file)
+
+    #     self.assertEqual(
+    #         faulty_rules, [], Fore.RED + "There are rules with unused selections"
+    #     )
+
+    # sigma cli SigmahqInvalidAllModifierIssue
+    # def test_all_value_modifier_single_item(self):
+    #     faulty_rules = []
+    #     for file in self.yield_next_rule_file_path(self.path_to_rules):
+    #         detection = self.get_rule_part(file_path=file, part_name="detection")
+    #         if detection:
+    #             for search_identifier in detection:
+    #                 if isinstance(detection[search_identifier], dict):
+    #                     for field in detection[search_identifier]:
+    #                         if "|all" in field and not isinstance(
+    #                             detection[search_identifier][field], list
+    #                         ):
+    #                             print(
+    #                                 Fore.RED
+    #                                 + "Rule {} uses the 'all' modifier on a single item in selection ({}/{})".format(
+    #                                     file, search_identifier, field
+    #                                 )
+    #                             )
+    #                             faulty_rules.append(file)
+
+    #     self.assertEqual(
+    #         faulty_rules,
+    #         [],
+    #         Fore.RED
+    #         + "There are rules with |all modifier only having one item. "
+    #         + "Single item values are not allowed to have an all modifier as some back-ends cannot support it. "
+    #         + "If you use it as a workaround to duplicate a field in a selection, use a new selection instead.",
+    #     )
+
+    # sigma cli SigmahqFieldUserIssue
+    # def test_field_user_localization(self):
+    #     def checkUser(faulty_rules, dict):
+    #         for key, value in dict.items():
+    #             if "User" in key:
+    #                 if type(value) == str:
+    #                     if "AUTORI" in value or "AUTHORI" in value:
+    #                         print("Localized user name '{}'.".format(value))
+    #                         faulty_rules.append(file)
+
+    #     faulty_rules = []
+    #     for file in self.yield_next_rule_file_path(self.path_to_rules):
+    #         detection = self.get_rule_part(file_path=file, part_name="detection")
+    #         for sel_key, sel_value in detection.items():
+    #             if sel_key == "condition" or sel_key == "timeframe":
+    #                 continue
+    #             # single item selection
+    #             if type(sel_value) == dict:
+    #                 checkUser(faulty_rules, sel_value)
+    #             if type(sel_value) == list:
+    #                 # skip keyword selection
+    #                 if type(sel_value[0]) != dict:
+    #                     continue
+    #                 # multiple item selection
+    #                 for item in sel_value:
+    #                     checkUser(faulty_rules, item)
+
+    #     self.assertEqual(
+    #         faulty_rules,
+    #         [],
+    #         Fore.RED
+    #         + "There are rules that match using localized user accounts. Better employ a generic version such as:\n"
+    #         + "User|contains: # covers many language settings\n"
+    #         + "    - 'AUTHORI'\n"
+    #         + "    - 'AUTORI'",
+    #     )
+
+    # sigma condition error
+    # def test_condition_operator_casesensitive(self):
+    #     faulty_rules = []
+    #     for file in self.yield_next_rule_file_path(self.path_to_rules):
+    #         detection = self.get_rule_part(file_path=file, part_name="detection")
+    #         if detection:
+    #             valid = True
+    #             if isinstance(detection["condition"], str):
+    #                 param = detection["condition"].split(" ")
+    #                 for item in param:
+    #                     if item.lower() == "or" and not item == "or":
+    #                         valid = False
+    #                     elif item.lower() == "and" and not item == "and":
+    #                         valid = False
+    #                     elif item.lower() == "not" and not item == "not":
+    #                         valid = False
+    #                     elif item.lower() == "of" and not item == "of":
+    #                         valid = False
+    #                 if not valid:
+    #                     print(
+    #                         Fore.RED
+    #                         + "Rule {} has a invalid condition '{}' : 'or','and','not','of' are lowercase".format(
+    #                             file, detection["condition"]
+    #                         )
+    #                     )
+    #                     faulty_rules.append(file)
+
+    #     self.assertEqual(
+    #         faulty_rules,
+    #         [],
+    #         Fore.RED + "There are rules using condition without lowercase operator",
+    #     )
+
+    def test_broken_thor_logsource_config(self):
+        faulty_config = False
+
+        # This test check of the "thor.yml" config file has a missing "WinEventLog:" prefix in Windows log sources
+        path_to_thor_config = "tests/thor.yml"
+        try:
+            path_to_thor_config = os.path.join(
+                os.path.dirname(os.path.realpath(__file__)), path_to_thor_config
+            )
+            thor_logsources = self.get_rule_yaml(path_to_thor_config)[0]["logsources"]
+
+            for key, value in thor_logsources.items():
+                try:
+                    if value["product"] == "windows":
+                        sources_list = value["sources"]
+                        for i in sources_list:
+                            if not i.startswith("WinEventLog:"):
+                                faulty_config = True
+                                print(
+                                    Fore.RED
+                                    + "/tests/thor.yml config file has a broken source. Windows Eventlog sources must start with the keyword 'WinEventLog:'"
+                                )
+                except:
+                    pass
+            self.assertEqual(
+                faulty_config,
+                False,
+                Fore.RED
+                + "thor.yml configuration file located in 'tests/thor.yml' has a borken log source definition",
+            )
+        except:
+            self.assertEqual(
+                faulty_config,
+                False,
+                Fore.RED
+                + "thor.yml configuration file was not found. Please make sure to run the script from the root of the sigma folder",
+            )
+
+    def test_re_invalid_escapes(self):
+        faulty_rules = []
+        MAX_DEPTH = 3
+
+        def create_escape_allow_list():
+            r"""
+            Create a list of characters that are allowed to be escaped.
+            1. Based on string.punctuation chars that would already be escaped by re.escape()
+            2. Followed by special chars like '\n', '\t', '\[0-9]' etc.
+            3. Followed by Double- or Single Quote to escape string literals.
+            """
+            allowed_2_be_escaped = []
+            index = 0
+            l = tuple(re.escape(string.punctuation))
+            for c in l:
+                if c == "\\":
+                    allowed_2_be_escaped.append(l[index + 1])
+                index += 1
+
+            re_specials = [
+                "A",
+                "b",
+                "B",
+                "d",
+                "D",
+                "f",
+                "n",
+                "r",
+                "s",
+                "S",
+                "t",
+                "v",
+                "w",
+                "W",
+                "Z",
+                # Match Groups
+                "0",
+                "1",
+                "2",
+                "3",
+                "4",
+                "5",
+                "6",
+                "7",
+                "8",
+                "9",
+            ]
+            allowed_2_be_escaped.extend(re_specials)
+
+            allowed_2_be_escaped.extend(
+                [
+                    '"',
+                    "'",
+                ]
+            )
+
+            return allowed_2_be_escaped
+
+        def check_list_or_recurse_on_dict(item, depth: int, special: bool) -> None:
+            """
+            Recursive walk through the detection to find "|re" occurance.
+            Jump to check_item_for_bad_escapes with lists or strings found.
+            """
+            if type(item) == list:
+                pass
+                # check_item_for_bad_escapes(item)
+            elif type(item) == dict and depth <= MAX_DEPTH:
+                for keys, sub_item in item.items():
+                    if (
+                        "|re" in keys
+                    ):  # Covers both "base64" and "base64offset" modifiers
+                        if type(sub_item) == str or type(sub_item) == list:
+                            check_item_for_bad_escapes(sub_item)
+                        else:
+                            check_list_or_recurse_on_dict(sub_item, depth + 1, True)
+                    else:
+                        check_list_or_recurse_on_dict(sub_item, depth + 1, special)
+
+        def check_item_for_bad_escapes(item):
+            """
+            Check item against bad escaped characters
+            """
+            found_bad_escapes = []
+            to_check = []
+            if type(item) == str:
+                to_check.append(item)
+            else:
+                to_check = item
+            for str_item in to_check:
+                l = tuple(str_item)
+                index = 0
+                for c in l:
+                    if c == "\\":
+                        # 'l[index-1] != "\\"' ---> Allows "\\\\"
+                        # Check if character after \ is not in escape_allow_list and also not already found
+                        if (
+                            l[index - 1] != "\\"
+                            and l[index + 1] not in escape_allow_list
+                            and l[index + 1] not in found_bad_escapes
+                        ):
+                            # Only for debugging:
+                            # print(f"Illegal escape found {c}{l[index+1]}")
+                            found_bad_escapes.append(f"{l[index+1]}")
+                    index += 1
+
+            if len(found_bad_escapes) > 0:
+                print(
+                    Fore.RED
+                    + "Rule {} has forbidden escapes in |re '{}'".format(
+                        file, ",".join(found_bad_escapes)
+                    )
+                )
+                faulty_rules.append(file)
+
+        # Create escape_allow_list for this test
+        escape_allow_list = create_escape_allow_list()
+
+        # For each rule file, extract detection and dive into recursion
+        for file in self.yield_next_rule_file_path(self.path_to_rules):
+            detection = self.get_rule_part(file_path=file, part_name="detection")
+            if detection:
+                check_list_or_recurse_on_dict(detection, 1, False)
+
+        self.assertEqual(
+            faulty_rules, [], Fore.RED + "There are rules using illegal re-escapes"
+        )
+
+    # def test_confirm_extension_is_yml(self):
+    # files_with_incorrect_extensions = []
+
+    # for file in self.yield_next_rule_file_path(self.path_to_rules):
+    # file_name_and_extension = os.path.splitext(file)
+    # if len(file_name_and_extension) == 2:
+    # extension = file_name_and_extension[1]
+    # if extension != ".yml":
+    # files_with_incorrect_extensions.append(file)
+
+    # self.assertEqual(files_with_incorrect_extensions, [], Fore.RED +
+    # "There are rule files with extensions other than .yml")
+    # sigma-cli validators attacktag
+    # def test_confirm_correct_mitre_tags(self):
+    #     files_with_incorrect_mitre_tags = []
+
+    #     for file in self.yield_next_rule_file_path(self.path_to_rules):
+    #         tags = self.get_rule_part(file_path=file, part_name="tags")
+    #         if tags:
+    #             for tag in tags:
+    #                 if tag.startswith("attack.") and tag not in self.MITRE_ALL:
+    #                     print(
+    #                         Fore.RED
+    #                         + "Rule {} has the following incorrect MITRE tag {}".format(
+    #                             file, tag
+    #                         )
+    #                     )
+    #                     files_with_incorrect_mitre_tags.append(file)
+
+    #     self.assertEqual(
+    #         files_with_incorrect_mitre_tags,
+    #         [],
+    #         Fore.RED
+    #         + "There are rules with incorrect/unknown MITRE Tags. (please inform us about new tags that are not yet supported in our tests) and check the correct tags here: https://attack.mitre.org/ ",
+    #     )
+
+    # sigma validators duplicate_tag
+    # def test_duplicate_tags(self):
+    #     files_with_incorrect_mitre_tags = []
+
+    #     for file in self.yield_next_rule_file_path(self.path_to_rules):
+    #         tags = self.get_rule_part(file_path=file, part_name="tags")
+    #         if tags:
+    #             known_tags = []
+    #             for tag in tags:
+    #                 if tag in known_tags:
+    #                     print(
+    #                         Fore.RED
+    #                         + "Rule {} has the duplicate tag {}".format(file, tag)
+    #                     )
+    #                     files_with_incorrect_mitre_tags.append(file)
+    #                 else:
+    #                     known_tags.append(tag)
+
+    #     self.assertEqual(
+    #         files_with_incorrect_mitre_tags,
+    #         [],
+    #         Fore.RED + "There are rules with duplicate tags",
+    #     )
+
+    #  sigma validators duplicate_references
+    # def test_duplicate_references(self):
+    #     files_with_duplicate_references = []
+
+    #     for file in self.yield_next_rule_file_path(self.path_to_rules):
+    #         references = self.get_rule_part(file_path=file, part_name="references")
+    #         if references:
+    #             known_references = []
+    #             for reference in references:
+    #                 if reference in known_references:
+    #                     print(
+    #                         Fore.RED
+    #                         + "Rule {} has the duplicate reference {}".format(
+    #                             file, reference
+    #                         )
+    #                     )
+    #                     files_with_duplicate_references.append(file)
+    #                 else:
+    #                     known_references.append(reference)
+
+    #     self.assertEqual(
+    #         files_with_duplicate_references,
+    #         [],
+    #         Fore.RED + "There are rules with duplicate references",
+    #     )
+
+    # sigma validator identifier_existence identifier_uniqueness
+    # def test_missing_id(self):
+    #     faulty_rules = []
+    #     dict_id = {}
+    #     for file in self.yield_next_rule_file_path(self.path_to_rules):
+    #         id = self.get_rule_part(file_path=file, part_name="id")
+    #         if not id:
+    #             print(Fore.YELLOW + "Rule {} has no field 'id'.".format(file))
+    #             faulty_rules.append(file)
+    #         elif len(id) != 36:
+    #             print(
+    #                 Fore.YELLOW
+    #                 + "Rule {} has a malformed 'id' (not 36 chars).".format(file)
+    #             )
+    #             faulty_rules.append(file)
+    #         elif id.lower() in dict_id.keys():
+    #             print(
+    #                 Fore.YELLOW
+    #                 + "Rule {} has the same 'id' as {}. Ids have to be unique.".format(
+    #                     file, dict_id[id]
+    #                 )
+    #             )
+    #             faulty_rules.append(file)
+    #         else:
+    #             dict_id[id.lower()] = file
+
+    #     self.assertEqual(
+    #         faulty_rules,
+    #         [],
+    #         Fore.RED
+    #         + "There are rules with missing or malformed 'id' fields. Generate an id (e.g. here: https://www.uuidgenerator.net/version4) and add it to the reported rule(s).",
+    #     )
+    # sigma-cli error
+    # def test_optional_date_modified(self):
+    #     faulty_rules = []
+    #     for file in self.yield_next_rule_file_path(self.path_to_rules):
+    #         modifiedfield = self.get_rule_part(file_path=file, part_name="modified")
+    #         if modifiedfield:
+    #             if not isinstance(modifiedfield, str):
+    #                 print(
+    #                     Fore.YELLOW
+    #                     + "Rule {} has a malformed 'modified' (should be YYYY/MM/DD).".format(
+    #                         file
+    #                     )
+    #                 )
+    #                 faulty_rules.append(file)
+    #             elif len(modifiedfield) != 10:
+    #                 print(
+    #                     Fore.YELLOW
+    #                     + "Rule {} has a malformed 'modified' (not 10 chars, should be YYYY/MM/DD).".format(
+    #                         file
+    #                     )
+    #                 )
+    #                 faulty_rules.append(file)
+    #             elif modifiedfield[4] != "/" or modifiedfield[7] != "/":
+    #                 print(
+    #                     Fore.YELLOW
+    #                     + "Rule {} has a malformed 'modified' (should be YYYY/MM/DD).".format(
+    #                         file
+    #                     )
+    #                 )
+    #                 faulty_rules.append(file)
+
+    #     self.assertEqual(
+    #         faulty_rules,
+    #         [],
+    #         Fore.RED
+    #         + "There are rules with malformed 'modified' fields. (create one, e.g. date: 2019-01-14)",
+    #     )
+
+    # sigma-cli error and validator status_existence status_unsupported
+    # def test_optional_status(self):
+    #     faulty_rules = []
+    #     valid_status = ["stable", "test", "experimental", "deprecated", "unsupported"]
+    #     for file in self.yield_next_rule_file_path(self.path_to_rules):
+    #         status_str = self.get_rule_part(file_path=file, part_name="status")
+    #         if status_str:
+    #             if not status_str in valid_status:
+    #                 print(
+    #                     Fore.YELLOW
+    #                     + "Rule {} has a invalid 'status' (check wiki).".format(file)
+    #                 )
+    #                 faulty_rules.append(file)
+    #             elif status_str == "unsupported":
+    #                 print(
+    #                     Fore.YELLOW
+    #                     + "Rule {} has the unsupported 'status', can not be in rules directory".format(
+    #                         file
+    #                     )
+    #                 )
+    #                 faulty_rules.append(file)
+    #         else:
+    #             print(
+    #                 Fore.YELLOW + "Rule {} is missing the 'status' field".format(file)
+    #             )
+    #             faulty_rules.append(file)
+
+    #     self.assertEqual(
+    #         faulty_rules,
+    #         [],
+    #         Fore.RED
+    #         + "There are rules with malformed or missing 'status' fields. (check https://github.com/SigmaHQ/sigma-specification)",
+    #     )
+
+    # Sigma validator all_of_them_condition
+    # def test_all_of_them_condition(self):
+    #     faulty_detections = []
+
+    #     for file in self.yield_next_rule_file_path(self.path_to_rules):
+    #         detection = self.get_rule_part(file_path=file, part_name="detection")
+
+    #         if "all of them" in detection["condition"]:
+    #             faulty_detections.append(file)
+
+    #     self.assertEqual(
+    #         faulty_detections,
+    #         [],
+    #         Fore.RED
+    #         + "There are rules using 'all of them'. Better use e.g. 'all of selection*' instead (and use the 'selection_' prefix as search-identifier).",
+    #     )
+
+    # sigma-cli validators tlptag
+    # def test_optional_tlp(self):
+    #     faulty_rules = []
+    #     valid_tlp = [
+    #         "WHITE",
+    #         "GREEN",
+    #         "AMBER",
+    #         "RED",
+    #     ]
+    #     for file in self.yield_next_rule_file_path(self.path_to_rules):
+    #         tlp_str = self.get_rule_part(file_path=file, part_name="tlp")
+    #         if tlp_str:
+    #             # it exists but isn't a string
+    #             if not isinstance(tlp_str, str):
+    #                 print(
+    #                     Fore.YELLOW
+    #                     + "Rule {} has a 'tlp' field that isn't a string.".format(file)
+    #                 )
+    #                 faulty_rules.append(file)
+    #             elif not tlp_str.upper() in valid_tlp:
+    #                 print(
+    #                     Fore.YELLOW
+    #                     + "Rule {} has a 'tlp' field with not valid value.".format(file)
+    #                 )
+    #                 faulty_rules.append(file)
+
+    #     self.assertEqual(
+    #         faulty_rules,
+    #         [],
+    #         Fore.RED
+    #         + "There are rules with malformed optional 'tlp' fields. (https://www.cisa.gov/tlp)",
+    #     )
+
+    # Not in the specification
+    # def test_optional_target(self):
+    #     faulty_rules = []
+    #     for file in self.yield_next_rule_file_path(self.path_to_rules):
+    #         target = self.get_rule_part(file_path=file, part_name="target")
+    #         if target:
+    #             # it exists but isn't a list
+    #             if not isinstance(target, list):
+    #                 print(
+    #                     Fore.YELLOW
+    #                     + "Rule {} has a 'target' field that isn't a list.".format(file)
+    #                 )
+    #                 faulty_rules.append(file)
+
+    #     self.assertEqual(
+    #         faulty_rules,
+    #         [],
+    #         Fore.RED
+    #         + "There are rules with malformed 'target' fields. (has to be a list of values even if it contains only a single value)",
+    #     )
+    # sigma validators duplicate_title
+    # def test_duplicate_titles(self):
+    #     # This test ensure that every rule has a unique title
+    #     faulty_rules = []
+    #     titles_dict = {}
+    #     for file in self.yield_next_rule_file_path(self.path_to_rules):
+    #         title = (
+    #             self.get_rule_part(file_path=file, part_name="title").lower().rstrip()
+    #         )
+    #         duplicate = False
+    #         for rule, title_ in titles_dict.items():
+    #             if title == title_:
+    #                 print(
+    #                     Fore.RED
+    #                     + "Rule {} has an already used title in {}.".format(file, rule)
+    #                 )
+    #                 duplicate = True
+    #                 faulty_rules.append(file)
+    #                 continue
+    #         if not duplicate:
+    #             titles_dict[file] = title
+
+    #     self.assertEqual(
+    #         faulty_rules,
+    #         [],
+    #         Fore.RED
+    #         + "There are rules that share the same 'title'. Please check: https://github.com/SigmaHQ/sigma/wiki/Rule-Creation-Guide#title",
+    #     )
+
+    # def test_invalid_logsource_attributes(self):
+    #     faulty_rules = []
+    #     valid_logsource = [
+    #         'category',
+    #         'product',
+    #         'service',
+    #         'definition',
+    #     ]
+    #     for file in self.yield_next_rule_file_path(self.path_to_rules):
+    #         logsource = self.get_rule_part(
+    #             file_path=file, part_name="logsource")
+    #         if not logsource:
+    #             print(Fore.RED + "Rule {} has no 'logsource'.".format(file))
+    #             faulty_rules.append(file)
+    #             continue
+    #         valid = True
+    #         for key in logsource:
+    #             if key.lower() not in valid_logsource:
+    #                 print(
+    #                     Fore.RED + "Rule {} has a logsource with an invalid field ({})".format(file, key))
+    #                 valid = False
+    #             elif not isinstance(logsource[key], str):
+    #                 print(
+    #                     Fore.RED + "Rule {} has a logsource with an invalid field type ({})".format(file, key))
+    #                 valid = False
+    #         if not valid:
+    #             faulty_rules.append(file)
+
+    #     self.assertEqual(faulty_rules, [], Fore.RED +
+    #                      "There are rules with non-conform 'logsource' fields. Please check: https://github.com/SigmaHQ/sigma/wiki/Rule-Creation-Guide#log-source")
+    # def test_field_name_typo(self):
+    #     # add "OriginalFilename" after Aurora switched to SourceFilename
+    #     # add "ProviderName" after special case powershell classic is resolved
+    #     faulty_rules = []
+    #     for file in self.yield_next_rule_file_path(self.path_to_rules):
+    #         # typos is a list of tuples where each tuple contains ("The typo", "The correct version")
+    #         typos = [("ServiceFilename", "ServiceFileName"), ("TargetFileName", "TargetFilename"), ("SourceFileName", "OriginalFileName"), ("Commandline", "CommandLine"), ("Targetobject", "TargetObject"), ("OriginalName", "OriginalFileName"), ("ImageFileName", "OriginalFileName"), ("details", "Details")]
+    #         # Some fields exists in certain log sources in different forms than other log sources. We need to handle these as special cases
+    #         # We check first the logsource to handle special cases
+    #         logsource = self.get_rule_part(file_path=file, part_name="logsource").values()
+    #         # add more typos in specific logsources below
+    #         if "windefend" in logsource:
+    #             typos += [("New_Value", "NewValue"), ("Old_Value", "OldValue"), ('Source_Name', 'SourceName'), ("Newvalue", "NewValue"), ("Oldvalue", "OldValue"), ('Sourcename', 'SourceName')]
+    #         elif "registry_set" in logsource or "registry_add" in logsource or "registry_event" in logsource:
+    #             typos += [("Targetobject", "TargetObject"), ("Eventtype", "EventType"), ("Newname", "NewName")]
+    #         elif "process_creation" in logsource:
+    #             typos += [("Parentimage", "ParentImage"), ("Integritylevel", "IntegrityLevel"), ("IntegritiLevel", "IntegrityLevel")]
+    #         elif "file_access" in logsource:
+    #             del(typos[typos.index(("TargetFileName", "TargetFilename"))]) # We remove the entry to "TargetFileName" to avoid confusion
+    #             typos += [("TargetFileName", "FileName"), ("TargetFilename","FileName")]
+    #         detection = self.get_rule_part(file_path=file, part_name="detection")
+    #         if detection:
+    #             for search_identifier in detection:
+    #                 if isinstance(detection[search_identifier], dict):
+    #                     for field in detection[search_identifier]:
+    #                         for typo in typos:
+    #                             if typo[0] in field:
+    #                                 print(Fore.RED + "Rule {} has a common typo ({}) which should be ({}) in selection ({}/{})".format(file, typo[0], typo[1], search_identifier, field))
+    #                                 faulty_rules.append(file)
+
+    #     self.assertEqual(faulty_rules, [], Fore.RED + "There are rules with common typos in field names.")
+
+    # Sigma error SigmaModifierError
+    # def test_unknown_value_modifier(self):
+    #     known_modifiers = [
+    #         "contains",
+    #         "startswith",
+    #         "endswith",
+    #         "all",
+    #         "base64offset",
+    #         "base64",
+    #         "utf16le",
+    #         "utf16be",
+    #         "wide",
+    #         "utf16",
+    #         "windash",
+    #         "re",
+    #         "cidr",
+    #     ]
+    #     faulty_rules = []
+    #     for file in self.yield_next_rule_file_path(self.path_to_rules):
+    #         detection = self.get_rule_part(file_path=file, part_name="detection")
+    #         if detection:
+    #             for search_identifier in detection:
+    #                 if isinstance(detection[search_identifier], dict):
+    #                     for field in detection[search_identifier]:
+    #                         if "|" in field:
+    #                             for current_modifier in field.split("|")[1:]:
+    #                                 found = False
+    #                                 for target_modifier in known_modifiers:
+    #                                     if current_modifier == target_modifier:
+    #                                         found = True
+    #                                 if not found:
+    #                                     print(
+    #                                         Fore.RED
+    #                                         + "Rule {} uses an unknown field modifier ({}/{})".format(
+    #                                             file, search_identifier, field
+    #                                         )
+    #                                     )
+    #                                     faulty_rules.append(file)
+
+    #     self.assertEqual(
+    #         faulty_rules,
+    #         [],
+    #         Fore.RED
+    #         + "There are rules with unknown value modifiers. Most often it is just a typo.",
+    #     )
+
+    # sigma error and validator attacktag,cartag,cvetag,detection_tag,stptag,tlptag
+    # def test_optional_tags(self):
+    #     files_with_incorrect_tags = []
+    #     tags_pattern = re.compile(
+    #         r"cve\.\d+\.\d+|attack\.(t\d{4}\.\d{3}|[gts]\d{4})$|attack\.[a-z_]+|car\.\d{4}-\d{2}-\d{3}|detection\.\w+"
+    #     )
+    #     for file in self.yield_next_rule_file_path(self.path_to_rules):
+    #         tags = self.get_rule_part(file_path=file, part_name="tags")
+    #         if tags:
+    #             for tag in tags:
+    #                 if tags_pattern.match(tag) == None:
+    #                     print(
+    #                         Fore.RED
+    #                         + "Rule {} has the invalid tag <{}>".format(file, tag)
+    #                     )
+    #                     files_with_incorrect_tags.append(file)
+
+    #     self.assertEqual(
+    #         files_with_incorrect_tags,
+    #         [],
+    #         Fore.RED
+    #         + "There are rules with incorrect/unknown Tags. (please inform us about new tags that are not yet supported in our tests) and check the correct tags here: https://github.com/SigmaHQ/sigma-specification/blob/main/specification/sigma-rules-specification.md#tags",
+    #     )
+
+    # sigma error and validator custom_attributes
+    # def test_optional_related(self):
+    #     faulty_rules = []
+    #     valid_type = ["derived", "obsoletes", "merged", "renamed", "similar"]
+    #     for file in self.yield_next_rule_file_path(self.path_to_rules):
+    #         related_lst = self.get_rule_part(file_path=file, part_name="related")
+    #         if related_lst:
+    #             # it exists but isn't a list
+    #             if not isinstance(related_lst, list):
+    #                 print(
+    #                     Fore.YELLOW
+    #                     + "Rule {} has a 'related' field that isn't a list.".format(
+    #                         file
+    #                     )
+    #                 )
+    #                 faulty_rules.append(file)
+    #             else:
+    #                 type_ok = True
+    #                 for ref in related_lst:
+    #                     try:
+    #                         id_str = ref["id"]
+    #                         type_str = ref["type"]
+    #                     except KeyError:
+    #                         print(
+    #                             Fore.YELLOW
+    #                             + "Rule {} has an invalid form of 'related/type' value.".format(
+    #                                 file
+    #                             )
+    #                         )
+    #                         faulty_rules.append(file)
+    #                         continue
+    #                     if not type_str in valid_type:
+    #                         type_ok = False
+    #                 # Only add one time if many bad type in the same file
+    #                 if type_ok == False:
+    #                     print(
+    #                         Fore.YELLOW
+    #                         + "Rule {} has a 'related/type' invalid value.".format(file)
+    #                     )
+    #                     faulty_rules.append(file)
+    #         else:
+    #             typo_list = []
+    #             # Add more typos
+    #             typo_list.append(
+    #                 self.get_rule_part(file_path=file, part_name="realted")
+    #             )
+    #             typo_list.append(
+    #                 self.get_rule_part(file_path=file, part_name="relatde")
+    #             )
+    #             typo_list.append(self.get_rule_part(file_path=file, part_name="relted"))
+    #             typo_list.append(self.get_rule_part(file_path=file, part_name="rlated"))
+
+    #             for i in typo_list:
+    #                 if i != None:
+    #                     print(
+    #                         Fore.YELLOW
+    #                         + "Rule {} has a typo in it's 'related' field.".format(file)
+    #                     )
+    #                     faulty_rules.append(file)
+
+    #     self.assertEqual(
+    #         faulty_rules,
+    #         [],
+    #         Fore.RED
+    #         + "There are rules with malformed optional 'related' fields. (check https://github.com/SigmaHQ/sigma-specification)",
+    #     )
+
+    # sigma error validators date_existence
+    # def test_missing_date(self):
+    #     faulty_rules = []
+    #     for file in self.yield_next_rule_file_path(self.path_to_rules):
+    #         datefield = self.get_rule_part(file_path=file, part_name="date")
+    #         if not datefield:
+    #             print(Fore.YELLOW + "Rule {} has no field 'date'.".format(file))
+    #             faulty_rules.append(file)
+    #         elif not isinstance(datefield, str):
+    #             print(
+    #                 Fore.YELLOW
+    #                 + "Rule {} has a malformed 'date' (should be YYYY/MM/DD).".format(
+    #                     file
+    #                 )
+    #             )
+    #             faulty_rules.append(file)
+    #         elif len(datefield) != 10:
+    #             print(
+    #                 Fore.YELLOW
+    #                 + "Rule {} has a malformed 'date' (not 10 chars, should be YYYY/MM/DD).".format(
+    #                     file
+    #                 )
+    #             )
+    #             faulty_rules.append(file)
+    #         elif datefield[4] != "/" or datefield[7] != "/":
+    #             print(
+    #                 Fore.YELLOW
+    #                 + "Rule {} has a malformed 'date' (should be YYYY/MM/DD).".format(
+    #                     file
+    #                 )
+    #             )
+    #             faulty_rules.append(file)
+
+    #     self.assertEqual(
+    #         faulty_rules,
+    #         [],
+    #         Fore.RED
+    #         + "There are rules with missing or malformed 'date' fields. (create one, e.g. date: 2019-01-14)",
+    #     )
+
+    # sigma validators description_existence description_length
+    # def test_missing_description(self):
+    #     faulty_rules = []
+    #     for file in self.yield_next_rule_file_path(self.path_to_rules):
+    #         descriptionfield = self.get_rule_part(
+    #             file_path=file, part_name="description"
+    #         )
+    #         if not descriptionfield:
+    #             print(Fore.YELLOW + "Rule {} has no field 'description'.".format(file))
+    #             faulty_rules.append(file)
+    #         elif not isinstance(descriptionfield, str):
+    #             print(
+    #                 Fore.YELLOW
+    #                 + "Rule {} has a 'description' field that isn't a string.".format(
+    #                     file
+    #                 )
+    #             )
+    #             faulty_rules.append(file)
+    #         elif len(descriptionfield) < 16:
+    #             print(
+    #                 Fore.YELLOW
+    #                 + "Rule {} has a really short description. Please elaborate.".format(
+    #                     file
+    #                 )
+    #             )
+    #             faulty_rules.append(file)
+
+    #     self.assertEqual(
+    #         faulty_rules,
+    #         [],
+    #         Fore.RED
+    #         + "There are rules with missing or malformed 'description' field. (create one, e.g. description: Detects the suspicious behaviour of process XY doing YZ)",
+    #     )
+
+    # sigma error validators level_existence
+    # def test_level(self):
+    #     faulty_rules = []
+    #     valid_level = [
+    #         "informational",
+    #         "low",
+    #         "medium",
+    #         "high",
+    #         "critical",
+    #     ]
+    #     for file in self.yield_next_rule_file_path(self.path_to_rules):
+    #         level_str = self.get_rule_part(file_path=file, part_name="level")
+    #         if not level_str:
+    #             print(Fore.YELLOW + "Rule {} has no field 'level'.".format(file))
+    #             faulty_rules.append(file)
+    #         elif not level_str in valid_level:
+    #             print(
+    #                 Fore.YELLOW
+    #                 + "Rule {} has a invalid 'level' (check wiki).".format(file)
+    #             )
+    #             faulty_rules.append(file)
+
+    #     self.assertEqual(
+    #         faulty_rules,
+    #         [],
+    #         Fore.RED
+    #         + "There are rules with missing or malformed 'level' fields. (check https://github.com/SigmaHQ/sigma-specification)",
+    #     )
+
+    # sigma error
+    # def test_optional_fields(self):
+    #     faulty_rules = []
+    #     for file in self.yield_next_rule_file_path(self.path_to_rules):
+    #         fields_str = self.get_rule_part(file_path=file, part_name="fields")
+    #         if fields_str:
+    #             # it exists but isn't a list
+    #             if not isinstance(fields_str, list):
+    #                 print(
+    #                     Fore.YELLOW
+    #                     + "Rule {} has a 'fields' field that isn't a list.".format(file)
+    #                 )
+    #                 faulty_rules.append(file)
+
+    #     self.assertEqual(
+    #         faulty_rules,
+    #         [],
+    #         Fore.RED
+    #         + "There are rules with malformed optional 'fields' fields. (has to be a list of values even if it contains only a single value)",
+    #     )
+
+    # sigma error
+    # def test_optional_falsepositives_listtype(self):
+    #     faulty_rules = []
+    #     for file in self.yield_next_rule_file_path(self.path_to_rules):
+    #         falsepositives_str = self.get_rule_part(
+    #             file_path=file, part_name="falsepositives"
+    #         )
+    #         if falsepositives_str:
+    #             # it exists but isn't a list
+    #             if not isinstance(falsepositives_str, list):
+    #                 print(
+    #                     Fore.YELLOW
+    #                     + "Rule {} has a 'falsepositives' field that isn't a list.".format(
+    #                         file
+    #                     )
+    #                 )
+    #                 faulty_rules.append(file)
+
+    #     self.assertEqual(
+    #         faulty_rules,
+    #         [],
+    #         Fore.RED
+    #         + "There are rules with malformed optional 'falsepositives' fields. (has to be a list of values even if it contains only a single value)",
+    #     )
+
+    # sigma error
+    # # Upgrade Detection Rule License  1.1
+    # def test_optional_author(self):
+    #     faulty_rules = []
+    #     for file in self.yield_next_rule_file_path(self.path_to_rules):
+    #         author_str = self.get_rule_part(file_path=file, part_name="author")
+    #         if author_str:
+    #             # it exists but isn't a string
+    #             if not isinstance(author_str, str):
+    #                 print(
+    #                     Fore.YELLOW
+    #                     + "Rule {} has a 'author' field that isn't a string.".format(
+    #                         file
+    #                     )
+    #                 )
+    #                 faulty_rules.append(file)
+
+    #     self.assertEqual(
+    #         faulty_rules,
+    #         [],
+    #         Fore.RED
+    #         + "There are rules with malformed 'author' fields. (has to be a string even if it contains many author)",
+    #     )
+
+    # sigma validator custom_attributes
+    # def test_references_plural(self):
+    #     faulty_rules = []
+    #     for file in self.yield_next_rule_file_path(self.path_to_rules):
+    #         reference = self.get_rule_part(file_path=file, part_name="reference")
+    #         if reference:
+    #             # it exists but in singular form
+    #             faulty_rules.append(file)
+
+    #     self.assertEqual(
+    #         faulty_rules,
+    #         [],
+    #         Fore.RED
+    #         + "There are rules with malformed 'references' fields. (has to be 'references' in plural form, not singular)",
+    #     )
+
+
+# sigma-cli validators attacktag
+# def get_mitre_data():
+#     """
+#     Use Tags from CTI subrepo to get consitant data
+#     """
+#     cti_path = "cti/"
+#     cti_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), cti_path)
+
+#     # Get ATT&CK information
+#     lift = attack_client(local_path=cti_path)
+#     # Techniques
+#     MITRE_TECHNIQUES = []
+#     MITRE_TECHNIQUE_NAMES = []
+#     MITRE_PHASE_NAMES = set()
+#     MITRE_TOOLS = []
+#     MITRE_GROUPS = []
+#     # Techniques
+#     enterprise_techniques = lift.get_enterprise_techniques()
+#     for t in enterprise_techniques:
+#         MITRE_TECHNIQUE_NAMES.append(
+#             t["name"].lower().replace(" ", "_").replace("-", "_")
+#         )
+#         for r in t.external_references:
+#             if "external_id" in r:
+#                 MITRE_TECHNIQUES.append(r["external_id"].lower())
+#         if "kill_chain_phases" in t:
+#             for kc in t["kill_chain_phases"]:
+#                 if "phase_name" in kc:
+#                     MITRE_PHASE_NAMES.add(kc["phase_name"].replace("-", "_"))
+#     # Tools / Malware
+#     enterprise_tools = lift.get_enterprise_tools()
+#     for t in enterprise_tools:
+#         for r in t.external_references:
+#             if "external_id" in r:
+#                 MITRE_TOOLS.append(r["external_id"].lower())
+#     enterprise_malware = lift.get_enterprise_malware()
+#     for m in enterprise_malware:
+#         for r in m.external_references:
+#             if "external_id" in r:
+#                 MITRE_TOOLS.append(r["external_id"].lower())
+#     # Groups
+#     enterprise_groups = lift.get_enterprise_groups()
+#     for g in enterprise_groups:
+#         for r in g.external_references:
+#             if "external_id" in r:
+#                 MITRE_GROUPS.append(r["external_id"].lower())
+
+#     # Debugging
+#     print(
+#         "MITRE ATT&CK LIST LENGTHS: %d %d %d %d %d"
+#         % (
+#             len(MITRE_TECHNIQUES),
+#             len(MITRE_TECHNIQUE_NAMES),
+#             len(list(MITRE_PHASE_NAMES)),
+#             len(MITRE_GROUPS),
+#             len(MITRE_TOOLS),
+#         )
+#     )
+
+#     # Combine all IDs to a big tag list
+#     return [
+#         "attack." + item
+#         for item in MITRE_TECHNIQUES
+#         + MITRE_TECHNIQUE_NAMES
+#         + list(MITRE_PHASE_NAMES)
+#         + MITRE_GROUPS
+#         + MITRE_TOOLS
+#     ]
 
 
 if __name__ == "__main__":
+    init(autoreset=True)
+    # Run the tests
     unittest.main()
